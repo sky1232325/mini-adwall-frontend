@@ -4,7 +4,7 @@
  */
 
 // 根据环境设置 API 基地址
-const API_BASE_URL = process.env.NODE_ENV === 'production'
+const API_BASE_URL = import.meta.env.MODE === 'production'
   ? '' // 生产环境：使用相同域名（通过 Nginx 反向代理到 /api/）
   : 'http://localhost:3001'; // 开发环境：本地后端地址
 
@@ -21,7 +21,10 @@ export const API_ENDPOINTS = {
  * @param {object} options - fetch 选项
  * @returns {Promise}
  */
-export async function apiCall(endpoint, options = {}) {
+export async function apiCall(
+  endpoint: string,
+  options: RequestInit = {}
+) {
   const url = `${API_BASE_URL}${endpoint}`;
   
   const defaultOptions = {
@@ -35,12 +38,12 @@ export async function apiCall(endpoint, options = {}) {
     ...options,
     headers: {
       ...defaultOptions.headers,
-      ...options.headers,
+      ...(options.headers as Record<string, string>),
     },
   });
 
   if (!response.ok) {
-    const error = new Error(`API Error: ${response.status}`);
+    const error = new Error(`API Error: ${response.status}`) as Error & { status: number };
     error.status = response.status;
     throw error;
   }
@@ -53,7 +56,7 @@ export async function apiCall(endpoint, options = {}) {
  * @param {File} file - 文件对象
  * @returns {Promise}
  */
-export async function uploadFile(file) {
+export async function uploadFile(file: File) {
   const formData = new FormData();
   formData.append('file', file);
 
