@@ -1,136 +1,86 @@
-# Mini广告墙 开发文档
+# Mini广告墙 - 开发说明
 
-## 项目概述
-- 目标：极简广告墙，支持广告 CRUD、竞价排序、视频上传/播放、动态表单配置。
-- 技术栈：React 19 + TypeScript + Vite、Ant Design 6、Express、Multer、CORS、文件存储。
-- 状态：基础功能与三项进阶任务（视频、多视频上传、动态表单）均已完成。
+面向演示的广告墙项目，提供前后端一体的最小可用实现，重点覆盖：技术选型、架构设计、复杂逻辑与开发细节、运行/部署方法。
 
-## 功能清单
-- 广告：创建、编辑、复制、删除。
-- 竞价排序：`score = price + price * clicks * 0.42`，后端统一排序返回。
-- 点击计数：点击广告后 +1 并刷新列表。
-- 视频：多文件上传，随机播放一条，播放结束跳转落地页。
-- 动态表单：表单项由后端 `/api/form-config` 下发并渲染。
-- 本地化：操作按钮与弹窗均为中文。
+## 技术选型
+- 前端：React 19 + TypeScript + Vite 7，UI 采用 Ant Design 6，uuid 生成主键。
+- 状态与存储：本地状态 + localStorage 持久化（无远端持久化）。
+- 后端：Node.js/Express 5，CORS、body-parser、Multer 上传，环境变量由 dotenv 可选加载。
+- 构建/工具：Vite 打包，ESLint 配置已就绪，tsconfig.app/node 负责前端/工具链。
 
-## 目录结构
-```
-miniAdWall_rebuild/
-├─ src/
-│  ├─ components/AdCard.tsx         # 广告卡片、操作下拉
-│  ├─ components/AdModal.tsx        # 动态表单弹窗+上传
-│  ├─ components/VideoPlayerModal.tsx
-│  ├─ services/api.ts               # 前端 API 封装
-│  ├─ utils/ranking.ts              # 排序算法
-│  ├─ types.ts                      # Ad / FormFieldConfig 类型
-│  ├─ App.tsx, main.tsx, App.css
-├─ server/
-│  ├─ index.js                      # Express API + Multer
-│  └─ uploads/                      # 视频文件存储
-├─ package.json, tsconfig.*, vite.config.ts
-```
+## 目录结构（关键部分）
+- `src/` 前端源码
+  - `components/AdCard.tsx` 卡片交互（编辑/复制/删除/点击）
+  - `components/AdModal.tsx` 新增/编辑/复制弹窗，输出 FormData
+  - `components/VideoPlayerModal.tsx` 视频播放弹窗，结束后跳转落地页
+  - `utils/ranking.ts` 广告排序逻辑
+  - `utils/api.ts` 前端 API 封装（健康检查、上传、广告列表）
+  - `types.ts` `Ad` 类型定义
+- `server/index.js` Express 服务（/api/health、/api/upload、/api/ads、静态 /uploads）
+- `server/.env.example` 环境变量模板
+- `public/` 静态资源，`dist/` 为构建输出
 
-## 快速开始
+## 架构与数据流
+- 展示层：栅格卡片 + 弹窗，所有数据在浏览器端管理。
+- 排序策略：`score = price + price * clicks * 0.42`，点击越多、出价越高的广告靠前。
+- 持久化：`localStorage` 保存广告数组，变更后即时写入并排序。
+- 交互流程：
+  1) 创建/编辑/复制广告 → 生成 `FormData` → 本地保存为 `Ad` 结构
+  2) 点击广告 → 点击数 +1 → 若有视频列表随机播放；无视频则直接新开落地页
+  3) 视频播放完成 → 自动跳转落地页
+- 后端职责：
+  - `/api/health` 健康检查
+  - `/api/upload` 单文件上传（字段名 `file`），保存到 `server/uploads`
+  - `/api/ads` 示例返回空数据（可对接真实数据源）
+  - 静态 `/uploads` 提供上传文件访问
+
+## 复杂/关键逻辑说明
+- **排序公式**：`calculateScore = price + price * clicks * 0.42`，在 `sortAdsByScore` 中对广告列表排序。
+- **点击播放逻辑**：点击卡片 → 增加点击数并持久化 → 如有视频随机选一个展示 → 关闭或结束后跳转落地页。
+- **表单与文件**：`AdModal` 通过 `FormData` 汇总字段与上传文件（字段名 `videos`，当前前端本地保存，不直传后端）。
+- **上传接口**：后端 `Multer` 保存文件到 `UPLOAD_DIR`，返回 `url`、`filename` 等元数据。
+
+## 运行与开发
 ```bash
 # 安装依赖
 npm install
+cd server && npm install && cd ..
 
-# 启动后端
+# 本地开发（前端 Vite）
+
+
+# 前端构建
+npm run build
+
+# 后端本地启动
 cd server
-node index.js   # http://localhost:3001
-
-# 启动前端（新终端）
-cd ..
-npm run dev     # http://localhost:5173
+npm start   # 或 node index.js
 ```
 
-## 环境变量
-- 当前前端 `API_BASE` 写死为 `http://localhost:3001/api`（见 `src/services/api.ts`）。
-- 部署时请改为环境变量（如 `VITE_API_BASE_URL`），并在 `api.ts` 中读取。
+## 环境变量（后端）
+复制 `server/.env.example` 为 `.env`，可配置：
+- `PORT` 默认 3001
+- `HOST` 默认 127.0.0.1
+- `CORS_ORIGIN` 允许的前端源，默认 `*`
+- `UPLOAD_DIR` 上传目录，默认 `server/uploads`
+- `MAX_FILE_SIZE` 上传大小（字节），默认 50MB
 
-## 前端说明
-- UI：Ant Design 6；主要用 Modal、Upload、Form、Input、InputNumber、Dropdown。
-- 状态：React hooks 本地状态；数据全量来自后端 API。
-- 动态表单：`AdModal` 请求 `/api/form-config` 并按配置渲染；上传字段独立处理。
-- 视频播放：如有 `videoUrls` 则随机取一条播放，结束后跳转 `landingUrl`。
-- 排序：使用后端排序结果直接展示。
+## API 约定（后端）
+- `GET /api/health` → `{ status, message, timestamp, uptime }`
+- `POST /api/upload` → `multipart/form-data`，字段 `file`，返回 `{ url, filename, size }`
+- `GET /api/ads` → 示例 `{ success: true, data: [], total: 0 }`
 
-## 后端说明（`server/index.js`）
-- 依赖：express, cors, body-parser, multer, fs, path。
-- 数据：`ads.json` 文件存储；视频落盘 `uploads/`，静态路径 `/uploads/<file>`。
-- 路由：
-  - `GET /api/form-config` 获取表单配置。
-  - `GET /api/ads` 获取列表（已按竞价分数排序）。
-  - `POST /api/ads` 创建广告（支持多视频）。
-  - `PUT /api/ads/:id` 更新广告（可追加视频）。
-  - `DELETE /api/ads/:id` 删除广告。
-  - `POST /api/ads/:id/click` 点击+1。
+## 部署要点（简版）
+- 前端：`npm run build` 后将 `dist/` 部署至静态站点（Nginx 根目录指向 dist，`try_files $uri $uri/ /index.html`）。
+- 后端：`cd server && npm install && pm2 start index.js --name miniadwall-api && pm2 save`。
+- 反向代理：在前端站点 Nginx 中添加 `/api/` 代理到 `http://127.0.0.1:3001`，`/uploads/` 映射到 `server/uploads`。
+- 上传目录：确保 `server/uploads` 可写（如 `chmod -R 755` 或按需提升）。
 
-## 数据结构
-```ts
-// Ad
-{
-  id: string;
-  title: string;
-  publisher: string;
-  content: string;
-  landingUrl: string;
-  price: number;
-  clicks: number;
-  videoUrls?: string[];
-  createdAt?: string;
-}
+## 快速问题排查
+- `/api/health` 返回 404：确认运行的后端版本为仓库内 `server/index.js`，并已重启 PM2。
+- 前端 API 502：检查 Nginx 代理到 3001，`nginx -t` 后重载；确认 PM2 进程在线。
+- 上传失败：检查上传目录权限与 `MAX_FILE_SIZE` 限制。
 
-// FormFieldConfig（后端下发）
-{
-  field: string;
-  label: string;
-  component: 'Input' | 'TextArea' | 'InputNumber' | 'Upload';
-  props?: Record<string, any>;
-  rules?: any[]; // 兼容后端返回的校验
-}
-```
-
-## 关键流程
-- 动态表单：
-  1) 弹窗开启 → 请求 `/api/form-config`；
-  2) 按配置渲染表单；
-  3) 提交：非上传字段写入 FormData，上传文件逐个 append `videos`；
-  4) 调用创建/更新 API，成功后刷新列表。
-- 视频上传/播放：
-  1) Upload 选择文件，`beforeUpload={() => false}` 阻止自动传；
-  2) 提交时随 FormData 发送，Multer 落盘并返回可访问 URL；
-  3) 点击广告随机播放一条，播放结束跳转落地页。
-
-## 测试要点
-- CRUD：创建/编辑/复制/删除成功并刷新列表。
-- 排序：调价或点击后顺序随分数变化。
-- 点击：点击计数 +1 并实时展示。
-- 上传：多视频成功上传且可播放。
-- 动态表单：配置字段正确渲染，校验按配置生效。
-- 本地化：操作/弹窗按钮均为中文。
-
-## 部署建议
-### 后端（Render / Railway）
-- 环境变量：可选 `PORT`（默认 3001）。
-- 持久化：`uploads/` 为本地存储，免费方案重启会丢失；如需持久化请挂载卷或换对象存储。
-- CORS：允许前端域名；示例 `origin` 添加 Vercel / GitHub Pages 域。
-- 部署产出：`https://<backend-domain>/api` 作为 API Base，`https://<backend-domain>/uploads/<file>` 提供视频。
-
-### 前端（Vercel / GitHub Pages）
-- 环境变量：在构建时设置 `VITE_API_BASE_URL=https://<backend-domain>/api`。
-- 构建：`npm run build`，产出 `dist/`。
-- 部署：
-  - Vercel：导入 repo，设置环境变量，选择 `npm run build` + `dist`。
-  - GitHub Pages：将 `dist` 推到 `gh-pages` 分支或用 Actions 自动部署。
-
-### 验收与可访问链接
-- 后端示例：`https://your-backend.example.com/api`（请替换为实际 Render/Railway 域名）。
-- 前端示例：`https://your-frontend.example.com`（请替换为实际 Vercel/Pages 域名）。
-- 验收 checklist：CRUD、上传与播放、动态表单加载、跨域请求、`/uploads` 资源可访问。
-
-## 后续优化
-- 将 `rules` 收敛为 antd `Rule[]` 类型并做枚举映射。
-- 统一读取环境变量，去除 API 硬编码。
-- 增加上传大小/类型限制提示、错误边界和加载骨架。
-- 补充自动化测试与 CI/CD（GitHub Actions），可添加 VS Code tasks 便捷启动。
+## 版本与分支
+- 当前分支：`miniadwall前端`
+- 远端：`origin`（主仓库）与 `frontend`（前端仓库），已推送完整代码与文档精简版。
