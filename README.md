@@ -2,6 +2,8 @@
 
 面向演示的广告墙项目，提供前后端一体的最小可用实现，重点覆盖：技术选型、架构设计、复杂逻辑与开发细节、运行/部署方法。
 
+**线上落地页**：https://miniadwall.1232325.xyz/
+
 ## 技术选型
 - 前端：React 19 + TypeScript + Vite 7，UI 采用 Ant Design 6，uuid 生成主键。
 - 状态与存储：本地状态 + localStorage 持久化（无远端持久化）。
@@ -47,7 +49,7 @@ npm install
 cd server && npm install && cd ..
 
 # 本地开发（前端 Vite）
-
+npm run dev
 
 # 前端构建
 npm run build
